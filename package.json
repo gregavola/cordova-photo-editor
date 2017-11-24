@@ -1,0 +1,25 @@
+{
+    "version": "1.0.0",
+    "name": "cordova-photoeditor",
+    "cordova_name": "cordova-photoeditor",
+    "description": "Cordova/Phonegap plugin for the PhotoEditor SDK.",
+    "author": "",
+    "license": "MIT",
+    "cordova": {
+        "id": "cordova-plugin-pesdk",
+        "platforms": [
+            "android",
+            "ios"
+        ]
+    },
+    "keywords": [
+        "cordova",
+        "cordova-android",
+        "cordova-ios",
+        "phonegap",
+        "camera"
+    ],
+    "dependencies": {
+        "xcode": "https://github.com/alunny/node-xcode.git"
+    }
+}
