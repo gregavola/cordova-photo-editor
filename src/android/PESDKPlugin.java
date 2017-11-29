@@ -15,6 +15,7 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.util.ArrayList;
+import android.util.Log;
 
 import ly.img.android.PESDK;
 import ly.img.android.sdk.models.state.PESDKConfig;
@@ -36,7 +37,7 @@ public class PESDKPlugin extends CordovaPlugin {
     public void initialize(CordovaInterface cordova, CordovaWebView webView) {
         super.initialize(cordova, webView);
 
-        PESDK.init(cordova.getActivity().getApplication(), "LICENSE");
+        PESDK.init(cordova.getActivity().getApplication(), "android_license");
     }
 
     @Override
@@ -46,6 +47,9 @@ public class PESDKPlugin extends CordovaPlugin {
             JSONObject options = data.getJSONObject(0);
             String filepath = options.optString("path", "");
             this.shouldSave = options.optBoolean("shouldSave", false);
+
+            Log.e("PHOTO_EDITOR", String.valueOf(this.shouldSave));
+            Log.e("PHOTO_EDITOR", filepath);
 
             Activity activity = this.cordova.getActivity();
             activity.runOnUiThread(this.present(activity, filepath, callbackContext));
@@ -62,9 +66,6 @@ public class PESDKPlugin extends CordovaPlugin {
             public void run() {
                 if (mainActivity != null && filepath.length() > 0) {
                     SettingsList settingsList = new SettingsList();
-
-                    PESDKConfig config = new PESDKConfig();
-                    config.setAspects(new CropAspectConfig(1, 1));
 
                     settingsList
                         .getSettingsModel(EditorLoadSettings.class)
