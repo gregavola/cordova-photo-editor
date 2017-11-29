@@ -14,35 +14,38 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.util.ArrayList;
 
 import ly.img.android.PESDK;
+import ly.img.android.sdk.models.state.PESDKConfig;
 import ly.img.android.sdk.models.constant.Directory;
 import ly.img.android.sdk.models.state.EditorLoadSettings;
 import ly.img.android.sdk.models.state.EditorSaveSettings;
 import ly.img.android.sdk.models.state.manager.SettingsList;
 import ly.img.android.ui.activities.ImgLyIntent;
 import ly.img.android.ui.activities.PhotoEditorBuilder;
+import ly.img.android.sdk.models.config.CropAspectConfig;
 
 public class PESDKPlugin extends CordovaPlugin {
 
     public static final int PESDK_EDITOR_RESULT = 1;
-    public static shouldSave = "false";
+    public static boolean shouldSave = false;
     private CallbackContext callback = null;
 
     @Override
     public void initialize(CordovaInterface cordova, CordovaWebView webView) {
         super.initialize(cordova, webView);
-        
-        PESDK.init(cordova.getActivity().getApplication(), "LICENSE_ANDROID");
+
+        PESDK.init(cordova.getActivity().getApplication(), "LICENSE");
     }
-    
+
     @Override
     public boolean execute(String action, JSONArray data, CallbackContext callbackContext) throws JSONException {
         if (action.equals("present")) {
             // Extract image path
             JSONObject options = data.getJSONObject(0);
             String filepath = options.optString("path", "");
-            boolean shouldSave = options.optBoolean("shouldSave", false);
+            this.shouldSave = options.optBoolean("shouldSave", false);
 
             Activity activity = this.cordova.getActivity();
             activity.runOnUiThread(this.present(activity, filepath, callbackContext));
@@ -60,8 +63,8 @@ public class PESDKPlugin extends CordovaPlugin {
                 if (mainActivity != null && filepath.length() > 0) {
                     SettingsList settingsList = new SettingsList();
 
-                    ArrayList<CropAspectConfig> cropConfig = new ArrayList<>();
-                    cropConfig.add(new CropAspectConfig("Square", 1, 1));
+                    PESDKConfig config = new PESDKConfig();
+                    config.setAspects(new CropAspectConfig(1, 1));
 
                     settingsList
                         .getSettingsModel(EditorLoadSettings.class)
@@ -69,8 +72,7 @@ public class PESDKPlugin extends CordovaPlugin {
                         .getSettingsModel(EditorSaveSettings.class)
                         .setExportDir(Directory.DCIM, "test")
                         .setExportPrefix("result_")
-                        .setJpegQuality(80, false),
-                        .setAspects(cropConfig),
+                        .setJpegQuality(80, false)
                         .setSavePolicy(
                             EditorSaveSettings.SavePolicy.KEEP_SOURCE_AND_CREATE_OUTPUT_IF_NECESSARY
                         );
@@ -109,7 +111,7 @@ public class PESDKPlugin extends CordovaPlugin {
     private void success(Intent data) {
         String path = data.getStringExtra(ImgLyIntent.RESULT_IMAGE_PATH);
 
-        if (shouldSave) {
+        if (this.shouldSave) {
             File mMediaFolder = new File(path);
 
             MediaScannerConnection.scanFile(cordova.getActivity().getApplicationContext(),
