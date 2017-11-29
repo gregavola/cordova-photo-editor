@@ -11,6 +11,8 @@
 
 @interface PESDKPlugin : CDVPlugin
 
+@property (assign) BOOL shouldSave;
+
 - (void)present:(CDVInvokedUrlCommand *)command;
 
 @end

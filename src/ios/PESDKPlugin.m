@@ -17,10 +17,12 @@
 
 @implementation PESDKPlugin
 
+@synthesize shouldSave;
+
 + (void)initialize {
     // Initialize the plugin and prepare the PESDK
     if (self == [PESDKPlugin self]) {
-        [PESDK unlockWithLicenseAt:[[NSBundle mainBundle] URLForResource:@"LICENSE_IOS" withExtension:nil]];
+        [PESDK unlockWithLicenseAt:[[NSBundle mainBundle] URLForResource:@"ios_license" withExtension:nil]];
     }
 }
 
@@ -50,7 +52,7 @@
  on the actions taken by the user:
  - Cancelling the editor results in no result.
  - Saving an edited image results in an OK result with the images
-   filepath given as parameter.
+ filepath given as parameter.
  - Any errors lead to a corresponding result
  
  See the `PESDKPhotoEditViewControllerDelegate` methods for
@@ -63,14 +65,19 @@
         self.lastCommand = command;
         
         PESDKConfiguration *configuration = [[PESDKConfiguration alloc] initWithBuilder:^(PESDKConfigurationBuilder * _Nonnull builder) {
-            // Customize the SDK to match your requirements:
-            // ...eg.:
-            // [builder setBackgroundColor:[UIColor whiteColor]];
+            PESDKCropAspect *squareCrop = [[PESDKCropAspect alloc] initWithWidth:1.0 height:1.0 localizedName:@"Square"];
+
+            [builder transformToolControllerOptions:^(PESDKTransformToolControllerOptionsBuilder *tool) {
+                tool.allowFreeCrop = false;
+                tool.allowedCropRatios = [NSArray arrayWithObject:squareCrop];
+            }];
         }];
 
         // Parse arguments and extract filepath
         NSDictionary *options = command.arguments[0];
         NSString *filepath = options[@"path"];
+        self.shouldSave = [options[@"shouldSave"] boolValue];
+        NSLog(@"Bool value: %d", shouldSave);
         if (filepath) {
             NSError *dataCreationError;
             NSData *imageData = [NSData dataWithContentsOfFile:filepath options:0 error:&dataCreationError];
@@ -141,7 +148,7 @@
 - (NSString *)tempFilePath:(NSString *)extension {
     NSString *docsPath = [NSTemporaryDirectory() stringByStandardizingPath];
     NSFileManager *fileMgr = [[NSFileManager alloc] init]; // recommended by Apple (vs [NSFileManager
-                                                           // defaultManager]) to be threadsafe
+    // defaultManager]) to be threadsafe
     NSString *filePath;
 
     // Generate unique file name
@@ -170,7 +177,12 @@
 // The PhotoEditViewController did save an image.
 - (void)photoEditViewController:(PESDKPhotoEditViewController *)photoEditViewController didSaveImage:(UIImage *)image imageAsData:(NSData *)data {
     if (image) {
-        [self saveImageToPhotoLibrary:image];
+        if(!photoEditViewController.hasChanges) {
+            NSLog(@"Images are the same");
+            [self returnBasicImage:image];
+        } else {
+            [self saveImageToPhotoLibrary:image];
+        }
     } else {
         CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_NO_RESULT];
         [self closeControllerWithResult:result];
@@ -189,8 +201,39 @@
     [self closeControllerWithResult:result];
 }
 
-#pragma mark - Result Handling
 
+#pragma mark - Result Handling
+/**
+ Process the image handling
+**/
+
+- (NSData*)processImage:(UIImage*)image
+{
+    NSData* data = nil;
+    data = UIImageJPEGRepresentation(image, 90 / 100.0f);
+    return data;
+}
+
+/**
+
+Simple return of the original image
+ **/
+- (void)returnBasicImage:(UIImage *)image {
+     [self.commandDelegate runInBackground:^{
+         CDVPluginResult *resultAsync;
+         NSString *extension =  @"jpg";
+         NSData* imageData = [self processImage:image];
+         NSURL *url = [self copyTempImageData:imageData withUTI:extension];
+         NSString *urlString = [url absoluteString];
+         NSDictionary *payload = [NSDictionary dictionaryWithObjectsAndKeys:urlString, @"url", extension, @"uti", nil];
+         resultAsync = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
+                                     messageAsDictionary:payload];
+
+         dispatch_async(dispatch_get_main_queue(), ^{
+             [self closeControllerWithResult:resultAsync];
+         });
+     }];
+}
 /**
  Saves an image to the iOS Photo Library and sends
  the corresponding results to Cordova.
@@ -199,56 +242,77 @@
  */
 - (void)saveImageToPhotoLibrary:(UIImage *)image {
     [self.commandDelegate runInBackground:^{
-        __block PHObjectPlaceholder *assetPlaceholder = nil;
-        
-        // Apple did a great job at making this API convoluted as fuck.
-        PHPhotoLibrary *photos = [PHPhotoLibrary sharedPhotoLibrary];
-        [photos performChanges:^{
-            // Request creating an asset from the image.
-            PHAssetChangeRequest *createAssetRequest = [PHAssetChangeRequest creationRequestForAssetFromImage:image];
-            // Get a placeholder for the new asset.
-            assetPlaceholder = [createAssetRequest placeholderForCreatedAsset];
-        } completionHandler:^(BOOL success, NSError *error) {
-            CDVPluginResult *result;
-            if (success) {
-                PHAsset *asset = [PHAsset fetchAssetsWithLocalIdentifiers:@[ assetPlaceholder.localIdentifier ] options: nil].firstObject;
-                if (asset != nil) {
-                    // Fetch high quality image and save in folder
-                    PHImageRequestOptions *operation = [[PHImageRequestOptions alloc] init];
-                    operation.deliveryMode = PHImageRequestOptionsDeliveryModeHighQualityFormat;
-                    [[PHImageManager defaultManager] requestImageDataForAsset:asset
-                                                                      options:operation
-                                                                resultHandler:^(NSData *imageData, NSString *dataUTI, UIImageOrientation orientation, NSDictionary *info) {
-                                                                    CDVPluginResult *resultAsync;
-                                                                    NSError *error = [info objectForKey:PHImageErrorKey];
-                                                                    if (error != nil) {
-                                                                        resultAsync = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:[error localizedDescription]];
-                                                                    } else {
-                                                                        NSURL *url = [self copyTempImageData:imageData withUTI:dataUTI];
-                                                                        NSString *urlString = [url absoluteString];
-                                                                        NSDictionary *payload = [NSDictionary dictionaryWithObjectsAndKeys:urlString, @"url", dataUTI, @"uti", nil];
-                                                                        resultAsync = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
-                                                                                                    messageAsDictionary:payload];
-                                                                    }
-                                                                    
-                                                                    dispatch_async(dispatch_get_main_queue(), ^{
-                                                                        [self closeControllerWithResult:resultAsync];
-                                                                    });
-                                                                }];
-                    return;
+
+        NSLog(@"Bool Save value: %d", self.shouldSave);
+
+        if (!self.shouldSave) {
+            CDVPluginResult *resultAsync;
+            NSString *extension =  @"jpg";
+            NSData* imageData = [self processImage:image];
+            NSURL *url = [self copyTempImageData:imageData withUTI:extension];
+            NSString *urlString = [url absoluteString];
+            NSDictionary *payload = [NSDictionary dictionaryWithObjectsAndKeys:urlString, @"url", extension, @"uti", nil];
+            resultAsync = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
+                                        messageAsDictionary:payload];
+
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self closeControllerWithResult:resultAsync];
+            });
+        } else {
+            __block PHObjectPlaceholder *assetPlaceholder = nil;
+
+            // Apple did a great job at making this API convoluted as fuck.
+            PHPhotoLibrary *photos = [PHPhotoLibrary sharedPhotoLibrary];
+            [photos performChanges:^{
+                // Request creating an asset from the image.
+                PHAssetChangeRequest *createAssetRequest = [PHAssetChangeRequest creationRequestForAssetFromImage:image];
+                // Get a placeholder for the new asset.
+                assetPlaceholder = [createAssetRequest placeholderForCreatedAsset];
+            } completionHandler:^(BOOL success, NSError *error) {
+                CDVPluginResult *result;
+                if (success) {
+                    PHAsset *asset = [PHAsset fetchAssetsWithLocalIdentifiers:@[ assetPlaceholder.localIdentifier ] options: nil].firstObject;
+                    if (asset != nil) {
+                        // Fetch high quality image and save in folder
+                        PHImageRequestOptions *operation = [[PHImageRequestOptions alloc] init];
+                        operation.deliveryMode = PHImageRequestOptionsDeliveryModeHighQualityFormat;
+                        [[PHImageManager defaultManager] requestImageDataForAsset:asset
+                                                                          options:operation
+                                                                    resultHandler:^(NSData *imageData, NSString *dataUTI, UIImageOrientation orientation, NSDictionary *info) {
+                                                                        CDVPluginResult *resultAsync;
+                                                                        NSError *error = [info objectForKey:PHImageErrorKey];
+                                                                        if (error != nil) {
+                                                                            resultAsync = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:[error localizedDescription]];
+                                                                        } else {
+                                                                            NSURL *url = [self copyTempImageData:imageData withUTI:dataUTI];
+                                                                            NSString *urlString = [url absoluteString];
+                                                                            NSDictionary *payload = [NSDictionary dictionaryWithObjectsAndKeys:urlString, @"url", dataUTI, @"uti", nil];
+                                                                            resultAsync = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
+                                                                                                        messageAsDictionary:payload];
+                                                                        }
+
+                                                                        dispatch_async(dispatch_get_main_queue(), ^{
+                                                                            [self closeControllerWithResult:resultAsync];
+                                                                        });
+                                                                    }];
+                        return;
+                    } else {
+                        result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR
+                                                   messageAsString:@"Failed to load photo asset."];
+                    }
                 } else {
                     result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR
-                                               messageAsString:@"Failed to load photo asset."];
+                                               messageAsString:[error localizedDescription]];
                 }
-            } else {
-                result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR
-                                           messageAsString:[error localizedDescription]];
-            }
-            
-            dispatch_async(dispatch_get_main_queue(), ^{
-                [self closeControllerWithResult:result];
-            });
-        }];
+
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [self closeControllerWithResult:result];
+                });
+            }];
+        }
+
+
+
     }];
 }
 

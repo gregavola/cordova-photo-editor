@@ -26,6 +26,7 @@ import ly.img.android.ui.activities.PhotoEditorBuilder;
 public class PESDKPlugin extends CordovaPlugin {
 
     public static final int PESDK_EDITOR_RESULT = 1;
+    public static shouldSave = "false";
     private CallbackContext callback = null;
 
     @Override
@@ -41,6 +42,7 @@ public class PESDKPlugin extends CordovaPlugin {
             // Extract image path
             JSONObject options = data.getJSONObject(0);
             String filepath = options.optString("path", "");
+            boolean shouldSave = options.optBoolean("shouldSave", false);
 
             Activity activity = this.cordova.getActivity();
             activity.runOnUiThread(this.present(activity, filepath, callbackContext));
@@ -57,14 +59,20 @@ public class PESDKPlugin extends CordovaPlugin {
             public void run() {
                 if (mainActivity != null && filepath.length() > 0) {
                     SettingsList settingsList = new SettingsList();
+
+                    ArrayList<CropAspectConfig> cropConfig = new ArrayList<>();
+                    cropConfig.add(new CropAspectConfig("Square", 1, 1));
+
                     settingsList
                         .getSettingsModel(EditorLoadSettings.class)
                         .setImageSourcePath(filepath.replace("file://", ""), true) // Load with delete protection true!
                         .getSettingsModel(EditorSaveSettings.class)
                         .setExportDir(Directory.DCIM, "test")
                         .setExportPrefix("result_")
+                        .setJpegQuality(80, false),
+                        .setAspects(cropConfig),
                         .setSavePolicy(
-                            EditorSaveSettings.SavePolicy.KEEP_SOURCE_AND_CREATE_ALWAYS_OUTPUT
+                            EditorSaveSettings.SavePolicy.KEEP_SOURCE_AND_CREATE_OUTPUT_IF_NECESSARY
                         );
 
                     cordova.setActivityResultCallback(self);
@@ -101,27 +109,37 @@ public class PESDKPlugin extends CordovaPlugin {
     private void success(Intent data) {
         String path = data.getStringExtra(ImgLyIntent.RESULT_IMAGE_PATH);
 
-        File mMediaFolder = new File(path);
+        if (shouldSave) {
+            File mMediaFolder = new File(path);
 
-        MediaScannerConnection.scanFile(cordova.getActivity().getApplicationContext(),
-                new String[]{mMediaFolder.getAbsolutePath()},
-                null,
-                new MediaScannerConnection.OnScanCompletedListener() {
-                    public void onScanCompleted(String path, Uri uri) {
-                        if (uri == null) {
-                            callback.error("Media saving failed.");
-                        } else {
-                            try {
-                                JSONObject json = new JSONObject();
-                                json.put("url", Uri.fromFile(new File(path)));
-                                callback.success(json);
-                            } catch (Exception e) {
-                                callback.error(e.getMessage());
+            MediaScannerConnection.scanFile(cordova.getActivity().getApplicationContext(),
+                    new String[]{mMediaFolder.getAbsolutePath()},
+                    null,
+                    new MediaScannerConnection.OnScanCompletedListener() {
+                        public void onScanCompleted(String path, Uri uri) {
+                            if (uri == null) {
+                                callback.error("Media saving failed.");
+                            } else {
+                                try {
+                                    JSONObject json = new JSONObject();
+                                    json.put("url", Uri.fromFile(new File(path)));
+                                    callback.success(json);
+                                } catch (Exception e) {
+                                    callback.error(e.getMessage());
+                                }
                             }
                         }
                     }
-                }
-        );
+            );
+        } else {
+            try {
+                JSONObject json = new JSONObject();
+                json.put("url", Uri.fromFile(new File(path)));
+                callback.success(json);
+            } catch (Exception e) {
+                callback.error(e.getMessage());
+            }
+        }
     }
 
 }
