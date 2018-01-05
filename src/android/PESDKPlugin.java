@@ -31,13 +31,17 @@ public class PESDKPlugin extends CordovaPlugin {
 
     public static final int PESDK_EDITOR_RESULT = 1;
     public static boolean shouldSave = false;
+    private static boolean didInitializeSDK = false;
     private CallbackContext callback = null;
 
     @Override
     public void initialize(CordovaInterface cordova, CordovaWebView webView) {
         super.initialize(cordova, webView);
 
-        PESDK.init(cordova.getActivity().getApplication(), "android_license");
+        if (!this.didInitializeSDK) {
+            PESDK.init(cordova.getActivity().getApplication(), "android_license");
+            this.didInitializeSDK = true;
+        }
     }
 
     @Override
