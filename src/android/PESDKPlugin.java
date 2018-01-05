@@ -84,7 +84,7 @@ public class PESDKPlugin extends CordovaPlugin {
                             .startActivityForResult(mainActivity, PESDK_EDITOR_RESULT);
                 } else {
                     // Just open the camera
-                    Intent intent = new Intent(mainActivity, CameraActivity.class);
+                    Intent intent = new Intent(mainActivity, CameraPreviewActivity.class);
                     callback = callbackContext;
                     cordova.startActivityForResult(self, intent, PESDK_EDITOR_RESULT);
                 }
