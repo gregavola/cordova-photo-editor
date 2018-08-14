@@ -1,0 +1,17 @@
+kernel vec4 coreImageKernel(sampler u_image, vec2 u_startPosition, vec2 u_delta, float u_blurRadius, float u_gradientSize, float u_size, float u_blurSteps) {
+  vec4 color = vec4(0.0);
+  float total = 0.0;
+  vec2 dc = destCoord();
+
+  float radius = u_blurRadius * smoothstep(0.0, 1.0, (abs(distance(dc, u_startPosition)) - u_size) / u_gradientSize);
+  
+  for (float t = -u_blurSteps; t <= u_blurSteps; t++) {
+    float percent = t / u_blurSteps;
+    vec4 samplePix = sample(u_image, samplerTransform(u_image, dc + u_delta * percent * radius));
+    float weight = (1.0 - abs(percent));
+    color += samplePix * weight;
+    total += weight;
+  }
+  
+  return color / total;
+}
