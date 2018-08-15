@@ -71,6 +71,9 @@
          <config-file parent="NSPhotoLibraryUsageDescription" target="*-Info.plist">
             <string>Accesses your photo library to save and open pictures.</string>
          </config-file>
+
+         <hook type="after_plugin_install" src="hooks/resolveDependencies.js" />
+         <hook type="after_platform_add" src="hooks/resolveDependencies.js" />
      </platform>
 
     <!-- Browser -->
