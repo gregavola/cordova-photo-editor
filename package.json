@@ -1,5 +1,5 @@
 {
-    "version": "1.1.2",
+    "version": "1.1.3",
     "name": "cordova-photoeditor",
     "cordova_name": "cordova-photoeditor",
     "description": "Cordova/Phonegap plugin for the PhotoEditor SDK.",
