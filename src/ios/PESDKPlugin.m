@@ -63,21 +63,34 @@
 - (void)present:(CDVInvokedUrlCommand *)command {
     if (self.lastCommand == nil) {
         self.lastCommand = command;
+
+                // Parse arguments and extract filepath
+        NSDictionary *options = command.arguments[0];
+        NSString *filepath = options[@"path"];
+        NSString *donePath = options[@"doneButton"];
+        self.shouldSave = [options[@"shouldSave"] boolValue];
+        NSLog(@"Bool value: %d", shouldSave);
+        
+        
+        if (donePath) {
+            [PESDK setBundleImageBlock:^UIImage * _Nullable(NSString * _Nonnull name) {
+                if ([name isEqualToString:@"imgly_icon_save"]) {
+                    return [UIImage imageNamed:donePath];
+                }
+                
+                return nil;
+            }];
+        }
         
         PESDKConfiguration *configuration = [[PESDKConfiguration alloc] initWithBuilder:^(PESDKConfigurationBuilder * _Nonnull builder) {
             PESDKCropAspect *squareCrop = [[PESDKCropAspect alloc] initWithWidth:1.0 height:1.0 localizedName:@"Square"];
-
+            
             [builder transformToolControllerOptions:^(PESDKTransformToolControllerOptionsBuilder *tool) {
                 tool.allowFreeCrop = false;
                 tool.allowedCropRatios = [NSArray arrayWithObject:squareCrop];
             }];
         }];
 
-        // Parse arguments and extract filepath
-        NSDictionary *options = command.arguments[0];
-        NSString *filepath = options[@"path"];
-        self.shouldSave = [options[@"shouldSave"] boolValue];
-        NSLog(@"Bool value: %d", shouldSave);
         if (filepath) {
             NSError *dataCreationError;
             NSData *imageData = [NSData dataWithContentsOfFile:filepath options:0 error:&dataCreationError];
