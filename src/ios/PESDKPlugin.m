@@ -111,7 +111,7 @@
             
             if (customStickers && categoryImage) {
                 [builder configureStickerToolController:^(PESDKStickerToolControllerOptionsBuilder *tool) {
-                    tool.defaultStickerCategoryIndex = 2;
+                    tool.defaultStickerCategoryIndex = 0;
                 }];
             }
             
