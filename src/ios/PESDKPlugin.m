@@ -68,22 +68,53 @@
         NSDictionary *options = command.arguments[0];
         NSString *filepath = options[@"path"];
         NSString *donePath = options[@"doneButton"];
+        NSString *categoryImage = options[@"categoryImage"];
+        NSString *categoryTitle = options[@"categoryTitle"];
         self.shouldSave = [options[@"shouldSave"] boolValue];
         NSLog(@"Bool value: %d", shouldSave);
         
+        NSArray *customStickers = options[@"stickers"];
+        
+        NSMutableArray<PESDKStickerCategory *> *categories = [[PESDKStickerCategory all] mutableCopy];
+        NSMutableArray<PESDKSticker *> *stickers = [[NSMutableArray alloc] init];
+        
+        if (customStickers && categoryImage) {
+            for (NSDictionary *stickerItem in customStickers) {
+                NSURL *url = [NSURL URLWithString:[stickerItem objectForKey:@"image_url"]];
+                NSURL *urlThumb = [NSURL URLWithString:[stickerItem objectForKey:@"image_thumb_url"]];
+                [stickers addObject:[[PESDKSticker alloc] initWithImageURL:url thumbnailURL:urlThumb identifier:url.path]];
+            }
+            
+            if (!categoryTitle) {
+                categoryTitle = @"Main";
+            }
+            
+            NSURL *categoryUrl = [NSURL URLWithString:categoryImage];
+            
+            [categories addObject:[[PESDKStickerCategory alloc] initWithTitle:categoryTitle imageURL:categoryUrl stickers:stickers]];
+            
+            PESDKStickerCategory.all = categories;
+        }
         
         if (donePath) {
             [PESDK setBundleImageBlock:^UIImage * _Nullable(NSString * _Nonnull name) {
                 if ([name isEqualToString:@"imgly_icon_save"]) {
                     return [UIImage imageNamed:donePath];
                 }
-                
                 return nil;
             }];
         }
         
+    
         PESDKConfiguration *configuration = [[PESDKConfiguration alloc] initWithBuilder:^(PESDKConfigurationBuilder * _Nonnull builder) {
             PESDKCropAspect *squareCrop = [[PESDKCropAspect alloc] initWithWidth:1.0 height:1.0 localizedName:@"Square"];
+            
+            if (customStickers && categoryImage) {
+                [builder configureStickerToolController:^(PESDKStickerToolControllerOptionsBuilder *tool) {
+                    tool.defaultStickerCategoryIndex = 2;
+                    tool.ca
+                }];
+            }
             
             [builder transformToolControllerOptions:^(PESDKTransformToolControllerOptionsBuilder *tool) {
                 tool.allowFreeCrop = false;
