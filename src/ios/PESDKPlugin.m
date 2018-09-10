@@ -75,7 +75,7 @@
         
         NSArray *customStickers = options[@"stickers"];
         
-        NSMutableArray<PESDKStickerCategory *> *categories = [[PESDKStickerCategory all] mutableCopy];
+        NSMutableArray<PESDKStickerCategory *> *categories = [[NSMutableArray alloc] init];
         NSMutableArray<PESDKSticker *> *stickers = [[NSMutableArray alloc] init];
         
         if (customStickers && categoryImage) {
@@ -112,7 +112,6 @@
             if (customStickers && categoryImage) {
                 [builder configureStickerToolController:^(PESDKStickerToolControllerOptionsBuilder *tool) {
                     tool.defaultStickerCategoryIndex = 2;
-                    tool.ca
                 }];
             }
             
