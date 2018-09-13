@@ -14,7 +14,7 @@ repositories {
 android {
 
     defaultConfig {
-        renderscriptTargetApi 23
+        renderscriptTargetApi 25
         renderscriptSupportModeEnabled true
     }
 
@@ -29,5 +29,5 @@ android {
 }
 
 dependencies {
-    compile 'ly.img.android:photo-editor-sdk:6.0.2'
+    compile 'ly.img.android:photo-editor-sdk:5.1.7'
 }
