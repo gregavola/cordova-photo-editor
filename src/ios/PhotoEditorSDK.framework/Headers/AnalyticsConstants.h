@@ -1,5 +1,5 @@
 //  This file is part of the PhotoEditor Software Development Kit.
-//  Copyright (C) 2016-2018 9elements GmbH <contact@9elements.com>
+//  Copyright (C) 2016-2017 9elements GmbH <contact@9elements.com>
 //  All rights reserved.
 //  Redistribution and use in source and binary forms, without
 //  modification, are permitted provided that the following license agreement
@@ -38,7 +38,6 @@ extern PESDKAnalyticsScreenViewName const PESDKAnalyticsScreenViewNameFrame;
 extern PESDKAnalyticsScreenViewName const PESDKAnalyticsScreenViewNameBrush;
 extern PESDKAnalyticsScreenViewName const PESDKAnalyticsScreenViewNameBrushColor;
 extern PESDKAnalyticsScreenViewName const PESDKAnalyticsScreenViewNameFocus;
-extern PESDKAnalyticsScreenViewName const PESDKAnalyticsScreenViewNameTextDesign;
 
 #pragma mark - Event Constants
 
@@ -81,9 +80,6 @@ extern PESDKAnalyticsEventName const PESDKAnalyticsEventNameStickerActionSelect;
 extern PESDKAnalyticsEventName const PESDKAnalyticsEventNameStickerRectChange;
 extern PESDKAnalyticsEventName const PESDKAnalyticsEventNameStickerRotationChange;
 extern PESDKAnalyticsEventName const PESDKAnalyticsEventNameStickerColorChange;
-
-extern PESDKAnalyticsEventName const PESDKAnalyticsEventNameTextDesignRectChange;
-extern PESDKAnalyticsEventName const PESDKAnalyticsEventNameTextDesignRotationChange;
 
 extern PESDKAnalyticsEventName const PESDKAnalyticsEventNameFrameSelect;
 extern PESDKAnalyticsEventName const PESDKAnalyticsEventNameFrameDeselect;
@@ -160,7 +156,6 @@ extern PESDKAnalyticsEventAttributeValue const PESDKAnalyticsEventAttributeValue
 extern PESDKAnalyticsEventAttributeValue const PESDKAnalyticsEventAttributeValueAdjustOptionShadows;
 extern PESDKAnalyticsEventAttributeValue const PESDKAnalyticsEventAttributeValueAdjustOptionHighlights;
 extern PESDKAnalyticsEventAttributeValue const PESDKAnalyticsEventAttributeValueAdjustOptionExposure;
-extern PESDKAnalyticsEventAttributeValue const PESDKAnalyticsEventAttributeValueAdjustOptionGamma;
 
 extern PESDKAnalyticsEventAttributeValue const PESDKAnalyticsEventAttributeValueActionAdd;
 extern PESDKAnalyticsEventAttributeValue const PESDKAnalyticsEventAttributeValueActionAlignment;
@@ -170,7 +165,6 @@ extern PESDKAnalyticsEventAttributeValue const PESDKAnalyticsEventAttributeValue
 extern PESDKAnalyticsEventAttributeValue const PESDKAnalyticsEventAttributeValueActionRedo;
 extern PESDKAnalyticsEventAttributeValue const PESDKAnalyticsEventAttributeValueActionBringToFront;
 extern PESDKAnalyticsEventAttributeValue const PESDKAnalyticsEventAttributeValueActionDelete;
-extern PESDKAnalyticsEventAttributeValue const PESDKAnalyticsEventAttributeValueActionInvert;
 
 extern PESDKAnalyticsEventAttributeValue const PESDKAnalyticsEventAttributeValueBrushOptionSize;
 extern PESDKAnalyticsEventAttributeValue const PESDKAnalyticsEventAttributeValueBrushOptionHardness;

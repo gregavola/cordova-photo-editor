@@ -12,6 +12,8 @@
 @interface PESDKPlugin : CDVPlugin
 
 @property (assign) BOOL shouldSave;
+@property (assign) BOOL shouldSaveCamera;
+@property (assign) BOOL fromCamera;
 
 - (void)present:(CDVInvokedUrlCommand *)command;
 

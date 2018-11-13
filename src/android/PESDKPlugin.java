@@ -18,10 +18,12 @@ import java.util.ArrayList;
 import android.util.Log;
 
 import ly.img.android.PESDK;
+import ly.img.android.sdk.utils.DataSourceArrayList;
 import ly.img.android.sdk.models.state.PESDKConfig;
 import ly.img.android.sdk.models.constant.Directory;
 import ly.img.android.sdk.models.config.StickerCategoryConfig;
 import ly.img.android.sdk.models.config.ImageStickerConfig;
+import ly.img.android.sdk.models.config.interfaces.StickerListConfigInterface;
 import ly.img.android.sdk.models.config.interfaces.StickerConfigInterface;
 import ly.img.android.sdk.models.state.EditorLoadSettings;
 import ly.img.android.sdk.models.state.EditorSaveSettings;
@@ -34,11 +36,12 @@ import ly.img.android.sdk.models.config.CropAspectConfig;
 public class PESDKPlugin extends CordovaPlugin {
 
     public static final int PESDK_EDITOR_RESULT = 1;
+    public final String editParam = "false";
     public static boolean shouldSave = false;
+    public static boolean shouldUseEditor = false;
     public static JSONArray customStickers = null;
-    public static String categoryName = "Untappd Stickers";
-    public static String categoryImage = null;
     private static boolean didInitializeSDK = false;
+    public SettingsList settingsList = new SettingsList();
     private CallbackContext callback = null;
 
     @Override
@@ -58,14 +61,11 @@ public class PESDKPlugin extends CordovaPlugin {
             JSONObject options = data.getJSONObject(0);
             String filepath = options.optString("path", "");
             customStickers = options.getJSONArray("stickers");
-            categoryName = options.optString("categoryName", "Untappd Stickers");
-            categoryImage = options.optString("categoryImage", null);
             shouldSave = options.optBoolean("shouldSave", false);
+            shouldUseEditor = options.optBoolean("shouldUseEditor", false);
 
             Log.e("PHOTO_EDITOR", String.valueOf(shouldSave));
             Log.e("PHOTO_EDITOR", filepath);
-            Log.e("PHOTO_EDITOR", categoryName);
-            Log.e("PHOTO_EDITOR", categoryImage);
             Log.e("PHOTO_EDITOR", customStickers.toString());
             Log.e("PHOTO_EDITOR", String.valueOf(customStickers.length()));
 
@@ -83,51 +83,66 @@ public class PESDKPlugin extends CordovaPlugin {
         return new Runnable() {
             public void run() {
                 if (mainActivity != null && filepath.length() > 0) {
-                    SettingsList settingsList = new SettingsList();
 
-                    if (customStickers.length() != 0 && categoryImage != null) {
+                    if (customStickers.length() != 0) {
                         PESDKConfig config = settingsList.getConfig();
 
                         Log.e("PHOTOEDITOR", "true");
 
-                        ArrayList<StickerConfigInterface> customStickersList = new ArrayList<StickerConfigInterface>();
+                        // Reference to the Category List
+                        DataSourceArrayList<StickerListConfigInterface> stickerCategories = config.getStickerConfig();
+                        // Clear the Category List, to remove default assets
+                        stickerCategories.clear();
 
                         for (int i=0; i<customStickers.length(); i++) {
                             try {
-                                JSONObject item = customStickers.getJSONObject(i);
+                                JSONObject categoryItemData = customStickers.getJSONObject(i);
+                                JSONObject stickerList = categoryItemData.getJSONObject("stickers");
 
-                                String itemUrl = item.getString("image_url");
-                                String itemThumbUrl = item.getString("image_thumb_url");
+                                ArrayList<StickerConfigInterface> customStickersList = new ArrayList();
 
-                                ImageStickerConfig configItem = new ImageStickerConfig(
-                                        "unique-photo-id-"+i,
-                                        "Photo Name - " +i,
-                                        ImageSource.create(Uri.parse(itemThumbUrl)),
-                                        ImageSource.create(Uri.parse(itemUrl))
+                                if (stickerList != null) {
 
-                                );
+                                    JSONArray stickerListItems = stickerList.getJSONArray("items");
 
-                                customStickersList.add(configItem);
+                                    Log.e("PHOTO_EDITOR", stickerListItems.toString());
+
+                                    for (int q=0; q<stickerListItems.length(); q++) {
+                                        JSONObject item = stickerListItems.getJSONObject(q);
+
+                                        String itemThumbUrl = item.getString("image_thumb_url");
+                                        String itemUrl = item.getString("image_url");
+
+                                        customStickersList.add(new ImageStickerConfig(
+                                                        "unique-photo-id-" + i + "-" +q,
+                                                        "Photo Name - " + q,
+                                                        ImageSource.create(Uri.parse(itemThumbUrl)),
+                                                ImageSource.create(Uri.parse(itemUrl))
+
+                                        ));
+                                    }
+
+                                }
+
+                                //Add new content to the ArrayList
+                                stickerCategories.add(new StickerCategoryConfig(
+                                        categoryItemData.getString("pack_title"),
+                                        ImageSource.create(Uri.parse(categoryItemData.getString("pack_image_url"))),
+                                        customStickersList
+                                ));
+
 
                             } catch (JSONException e) {
                                 e.printStackTrace();
                             }
                         }
-
-                        StickerCategoryConfig stickerCategoryConfig = new StickerCategoryConfig(
-                                "Untappd Stickers",
-                                ImageSource.create(Uri.parse(categoryImage)),
-                                customStickersList
-                        );
-
-                        config.setStickerLists(stickerCategoryConfig);
                     }
 
                     settingsList
                         .getSettingsModel(EditorLoadSettings.class)
                         .setImageSourcePath(filepath.replace("file://", ""), true) // Load with delete protection true!
                         .getSettingsModel(EditorSaveSettings.class)
-                        .setExportDir(Directory.DCIM, "test")
+                        .setExportDir(Directory.DCIM, "untappd")
                         .setExportPrefix("result_")
                         .setJpegQuality(80, false)
                         .setSavePolicy(
@@ -138,6 +153,11 @@ public class PESDKPlugin extends CordovaPlugin {
                     new PhotoEditorBuilder(mainActivity)
                             .setSettingsList(settingsList)
                             .startActivityForResult(mainActivity, PESDK_EDITOR_RESULT);
+                } else {
+                    // Just open the camera
+                    Intent intent = new Intent(mainActivity, CameraActivity.class);
+                    callback = callbackContext;
+                    cordova.startActivityForResult(self, intent, PESDK_EDITOR_RESULT);
                 }
             }
         };
@@ -145,14 +165,34 @@ public class PESDKPlugin extends CordovaPlugin {
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, android.content.Intent data) {
+        Log.e("PHOTO-EDITOR-P", String.valueOf(resultCode));
         if (requestCode == PESDK_EDITOR_RESULT) {
             switch (resultCode){
                 case Activity.RESULT_OK:
                     success(data);
                     break;
                 case Activity.RESULT_CANCELED:
-                    callback.error(""); // empty string signals cancellation
+                    if (data != null) {
+                        String fromCamera = data.getStringExtra("fromCamera");
+                        Log.e("PHOTO_EDITOR","FromCamera: " + fromCamera);
+                        if (fromCamera != null) {
+                            if (fromCamera.equals("true")) {
+                                // call the camera back from the dead
+                                Log.e("PHOTO_EDITOR","About to recall camera");
+                                Activity activity = this.cordova.getActivity();
+                                activity.runOnUiThread(this.present(activity, "", callback));
+                            } else {
+                                callback.error("no image selected"); // empty string signals cancellation
+                            }
+                        } else {
+                            callback.error("no image selected"); // empty string signals cancellation
+                        }
+                    } else {
+                        callback.error("no image selected"); // empty string signals cancellation
+                    }
+
                     break;
+
                 default:
                     callback.error("Media error (code " + resultCode + ")");
                     break;
@@ -165,7 +205,6 @@ public class PESDKPlugin extends CordovaPlugin {
 
         if (shouldSave) {
             File mMediaFolder = new File(path);
-
             MediaScannerConnection.scanFile(cordova.getActivity().getApplicationContext(),
                     new String[]{mMediaFolder.getAbsolutePath()},
                     null,
@@ -175,8 +214,16 @@ public class PESDKPlugin extends CordovaPlugin {
                                 callback.error("Media saving failed.");
                             } else {
                                 try {
+
                                     JSONObject json = new JSONObject();
                                     json.put("url", Uri.fromFile(new File(path)));
+
+                                    if (settingsList.getSettingsModel(EditorSaveSettings.class).isExportNecessary()) {
+                                        json.put("edit", "true");
+                                    } else {
+                                        json.put("edit", "false");
+                                    }
+
                                     callback.success(json);
                                 } catch (Exception e) {
                                     callback.error(e.getMessage());
@@ -189,6 +236,13 @@ public class PESDKPlugin extends CordovaPlugin {
             try {
                 JSONObject json = new JSONObject();
                 json.put("url", Uri.fromFile(new File(path)));
+
+                if (settingsList.getSettingsModel(EditorSaveSettings.class).isExportNecessary()) {
+                    json.put("edit", "true");
+                } else {
+                    json.put("edit", "false");
+                }
+
                 callback.success(json);
             } catch (Exception e) {
                 callback.error(e.getMessage());

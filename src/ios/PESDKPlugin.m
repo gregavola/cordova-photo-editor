@@ -63,35 +63,39 @@
 - (void)present:(CDVInvokedUrlCommand *)command {
     if (self.lastCommand == nil) {
         self.lastCommand = command;
-
-                // Parse arguments and extract filepath
+        
+        // Parse arguments and extract filepath
         NSDictionary *options = command.arguments[0];
         NSString *filepath = options[@"path"];
         NSString *donePath = options[@"doneButton"];
-        NSString *categoryImage = options[@"categoryImage"];
-        NSString *categoryTitle = options[@"categoryTitle"];
         self.shouldSave = [options[@"shouldSave"] boolValue];
+        self.shouldSaveCamera = [options[@"shouldSaveCamera"] boolValue];
         NSLog(@"Bool value: %d", shouldSave);
         
-        NSArray *customStickers = options[@"stickers"];
+        NSDictionary *allStickers = options[@"stickers"];
         
         NSMutableArray<PESDKStickerCategory *> *categories = [[NSMutableArray alloc] init];
         NSMutableArray<PESDKSticker *> *stickers = [[NSMutableArray alloc] init];
         
-        if (customStickers && categoryImage) {
-            for (NSDictionary *stickerItem in customStickers) {
-                NSURL *url = [NSURL URLWithString:[stickerItem objectForKey:@"image_url"]];
-                NSURL *urlThumb = [NSURL URLWithString:[stickerItem objectForKey:@"image_thumb_url"]];
-                [stickers addObject:[[PESDKSticker alloc] initWithImageURL:url thumbnailURL:urlThumb identifier:url.path]];
+        if (allStickers) {
+            
+            for (NSDictionary *stickerPack in allStickers) {
+                NSDictionary *stickerList = [stickerPack objectForKey:@"stickers"];
+                if (stickerList) {
+                    NSDictionary *stickerItems = [stickerList objectForKey:@"items"];
+                    for (NSDictionary *stickerItem in stickerItems) {
+                        NSURL *url = [NSURL URLWithString:[stickerItem objectForKey:@"image_url"]];
+                        NSURL *urlThumb = [NSURL URLWithString:[stickerItem objectForKey:@"image_thumb_url"]];
+                        [stickers addObject:[[PESDKSticker alloc] initWithImageURL:url thumbnailURL:urlThumb identifier:url.path]];
+                    }
+                    
+                    NSString *categoryTitle = [stickerPack objectForKey:@"pack_title"];
+                    NSString *categoryImage = [stickerPack objectForKey:@"pack_image_url"];
+                    NSURL *categoryUrl = [NSURL URLWithString:categoryImage];
+                    
+                    [categories addObject:[[PESDKStickerCategory alloc] initWithTitle:categoryTitle imageURL:categoryUrl stickers:stickers]];
+                }
             }
-            
-            if (!categoryTitle) {
-                categoryTitle = @"Main";
-            }
-            
-            NSURL *categoryUrl = [NSURL URLWithString:categoryImage];
-            
-            [categories addObject:[[PESDKStickerCategory alloc] initWithTitle:categoryTitle imageURL:categoryUrl stickers:stickers]];
             
             PESDKStickerCategory.all = categories;
         }
@@ -105,23 +109,45 @@
             }];
         }
         
-    
         PESDKConfiguration *configuration = [[PESDKConfiguration alloc] initWithBuilder:^(PESDKConfigurationBuilder * _Nonnull builder) {
-            PESDKCropAspect *squareCrop = [[PESDKCropAspect alloc] initWithWidth:1.0 height:1.0 localizedName:@"Square"];
+            // Customize the SDK to match your requirements:
+            // ...eg.:
+            // [builder setBackgroundColor:[UIColor whiteColor]];
             
-            if (customStickers && categoryImage) {
-                [builder configureStickerToolController:^(PESDKStickerToolControllerOptionsBuilder *tool) {
-                    tool.defaultStickerCategoryIndex = 0;
-                }];
-            }
-            
-            [builder transformToolControllerOptions:^(PESDKTransformToolControllerOptionsBuilder *tool) {
-                tool.allowFreeCrop = false;
-                tool.allowedCropRatios = [NSArray arrayWithObject:squareCrop];
+            // Disable video recording
+            [builder configureCameraViewController:^(PESDKCameraViewControllerOptionsBuilder * _Nonnull cameraBuilder) {
+                [cameraBuilder setAllowedRecordingModesAsNSNumbers:@[@0]];
+                [cameraBuilder setShowCancelButton:YES];
+                
+                // make all buttons white
+                cameraBuilder.photoActionButtonConfigurationClosure = ^(PESDKButton * _Nonnull button) {
+                    [button setTintColor:[UIColor whiteColor]];
+                };
+                
+                cameraBuilder.filterSelectorButtonConfigurationClosure = ^(PESDKButton * _Nonnull button) {
+                    [button setTintColor:[UIColor whiteColor]];
+                };
+                
+                cameraBuilder.cancelButtonConfigurationClosure = ^(PESDKButton * _Nonnull button) {
+                    [button setTintColor:[UIColor whiteColor]];
+                };
+                
+                cameraBuilder.cameraRollButtonConfigurationClosure = ^(PESDKButton * _Nonnull button) {
+                    [button setTintColor:[UIColor whiteColor]];
+                };
+                
+                cameraBuilder.switchCameraButtonConfigurationClosure = ^(PESDKButton * _Nonnull button) {
+                    [button setTintColor:[UIColor whiteColor]];
+                };
+                
+                cameraBuilder.flashButtonConfigurationClosure = ^(PESDKButton * _Nonnull button) {
+                    [button setTintColor:[UIColor whiteColor]];
+                };
             }];
         }];
-
+        
         if (filepath) {
+            self.fromCamera = NO;
             NSError *dataCreationError;
             NSData *imageData = [NSData dataWithContentsOfFile:filepath options:0 error:&dataCreationError];
             
@@ -129,7 +155,7 @@
             if (imageData && !dataCreationError) {
                 PESDKPhotoEditViewController *photoEditViewController = [[PESDKPhotoEditViewController alloc] initWithData:imageData configuration:configuration];
                 photoEditViewController.delegate = self;
-
+                
                 dispatch_async(dispatch_get_main_queue(), ^{
                     [self.viewController presentViewController:photoEditViewController animated:YES completion:nil];
                 });
@@ -137,8 +163,14 @@
                 NSLog(@"Failed to open given path: %@", dataCreationError);
             }
         } else {
+            self.fromCamera = NO;
             PESDKCameraViewController *cameraViewController = [[PESDKCameraViewController alloc] initWithConfiguration:configuration];
             [cameraViewController setCompletionBlock:^(UIImage * _Nullable image, NSURL * _Nullable url) {
+                
+                if (self.shouldSaveCamera) {
+                    [self saveImageToPhotoLibrary:image];
+                }
+                
                 PESDKPhotoEditViewController *photoEditViewController = [[PESDKPhotoEditViewController alloc] initWithPhoto:image configuration:configuration];
                 photoEditViewController.delegate = self;
                 [self.viewController dismissViewControllerAnimated:YES completion:^{
@@ -151,6 +183,7 @@
             });
         }
     }
+    
 }
 
 
@@ -234,8 +267,74 @@
 
 // The PhotoEditViewController was cancelled.
 - (void)photoEditViewControllerDidCancel:(PESDKPhotoEditViewController *)photoEditViewController {
-    CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_NO_RESULT];
-    [self closeControllerWithResult:result];
+    
+    if (self.fromCamera) {
+        [self closeControllerWithResult:nil];
+        NSLog(@"Camera open");
+        
+        PESDKConfiguration *configuration = [[PESDKConfiguration alloc] initWithBuilder:^(PESDKConfigurationBuilder * _Nonnull builder) {
+            // Customize the SDK to match your requirements:
+            // ...eg.:
+            // [builder setBackgroundColor:[UIColor whiteColor]];
+            
+            // Disable video recording
+            [builder configureCameraViewController:^(PESDKCameraViewControllerOptionsBuilder * _Nonnull cameraBuilder) {
+                [cameraBuilder setAllowedRecordingModesAsNSNumbers:@[@0]];
+                [cameraBuilder setShowCancelButton:YES];
+                
+                // make all buttons white
+                cameraBuilder.photoActionButtonConfigurationClosure = ^(PESDKButton * _Nonnull button) {
+                    [button setTintColor:[UIColor whiteColor]];
+                };
+                
+                cameraBuilder.filterSelectorButtonConfigurationClosure = ^(PESDKButton * _Nonnull button) {
+                    [button setTintColor:[UIColor whiteColor]];
+                };
+                
+                cameraBuilder.cancelButtonConfigurationClosure = ^(PESDKButton * _Nonnull button) {
+                    [button setTintColor:[UIColor whiteColor]];
+                };
+                
+                cameraBuilder.cameraRollButtonConfigurationClosure = ^(PESDKButton * _Nonnull button) {
+                    [button setTintColor:[UIColor whiteColor]];
+                };
+                
+                cameraBuilder.switchCameraButtonConfigurationClosure = ^(PESDKButton * _Nonnull button) {
+                    [button setTintColor:[UIColor whiteColor]];
+                };
+                
+                cameraBuilder.flashButtonConfigurationClosure = ^(PESDKButton * _Nonnull button) {
+                    [button setTintColor:[UIColor whiteColor]];
+                };
+            }];
+        }];
+        
+        PESDKCameraViewController *cameraViewController = [[PESDKCameraViewController alloc] initWithConfiguration:configuration];
+        [cameraViewController setCancelBlock:^{
+            [self closeControllerWithResult:nil];
+        }];
+        [cameraViewController setCompletionBlock:^(UIImage * _Nullable image, NSURL * _Nullable url) {
+            
+            if (self.shouldSaveCamera) {
+                [self saveImageToPhotoLibrary:image];
+            }
+            
+            PESDKPhotoEditViewController *photoEditViewController = [[PESDKPhotoEditViewController alloc] initWithPhoto:image configuration:configuration];
+            photoEditViewController.delegate = self;
+            [self.viewController dismissViewControllerAnimated:YES completion:^{
+                [self.viewController presentViewController:photoEditViewController animated:YES completion:nil];
+            }];
+        }];
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self.viewController presentViewController:cameraViewController animated:YES completion:nil];
+        });
+    } else {
+        CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_NO_RESULT];
+        [self closeControllerWithResult:result];
+    }
+    
+    
 }
 
 // The PhotoEditViewController could not create an image.
@@ -268,7 +367,7 @@ Simple return of the original image
          NSData* imageData = [self processImage:image];
          NSURL *url = [self copyTempImageData:imageData withUTI:extension];
          NSString *urlString = [url absoluteString];
-         NSDictionary *payload = [NSDictionary dictionaryWithObjectsAndKeys:urlString, @"url", extension, @"uti", nil];
+         NSDictionary *payload = [NSDictionary dictionaryWithObjectsAndKeys:urlString, @"url", extension, @"uti", nil, @"false", @"edit", nil];
          resultAsync = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
                                      messageAsDictionary:payload];
 
@@ -294,7 +393,7 @@ Simple return of the original image
             NSData* imageData = [self processImage:image];
             NSURL *url = [self copyTempImageData:imageData withUTI:extension];
             NSString *urlString = [url absoluteString];
-            NSDictionary *payload = [NSDictionary dictionaryWithObjectsAndKeys:urlString, @"url", extension, @"uti", nil];
+            NSDictionary *payload = [NSDictionary dictionaryWithObjectsAndKeys:urlString, @"url", extension, @"uti", @"false", @"edit", nil];
             resultAsync = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
                                         messageAsDictionary:payload];
 
@@ -329,7 +428,7 @@ Simple return of the original image
                                                                         } else {
                                                                             NSURL *url = [self copyTempImageData:imageData withUTI:dataUTI];
                                                                             NSString *urlString = [url absoluteString];
-                                                                            NSDictionary *payload = [NSDictionary dictionaryWithObjectsAndKeys:urlString, @"url", dataUTI, @"uti", nil];
+                                                                            NSDictionary *payload = [NSDictionary dictionaryWithObjectsAndKeys:urlString, @"url", dataUTI, @"uti",  @"true", @"edit", nil];
                                                                             resultAsync = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
                                                                                                         messageAsDictionary:payload];
                                                                         }
