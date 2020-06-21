@@ -65,6 +65,7 @@
          <framework src="AssetsLibrary.framework" />
          <framework src="MobileCoreServices.framework" />
          <framework src="src/ios/PhotoEditorSDK.framework" custom="true" embed="true" />
+         <framework src="src/ios/ImglyKit.framework" custom="true" embed="true" />
          <config-file parent="NSCameraUsageDescription" target="*-Info.plist">
             <string>Uses your camera to snap pictures.</string>
          </config-file>
