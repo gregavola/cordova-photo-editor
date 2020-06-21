@@ -116,8 +116,13 @@
             
             // Disable video recording
             [builder configureCameraViewController:^(PESDKCameraViewControllerOptionsBuilder * _Nonnull cameraBuilder) {
-                [cameraBuilder setAllowedRecordingModesAsNSNumbers:@[@0]];
-                [cameraBuilder setShowCancelButton:YES];
+                // Just enable photos
+                cameraBuilder.allowedRecordingModes = @[@(RecordingModePhoto)];
+                // Show cancel button
+                cameraBuilder.showCancelButton = true;
+                
+                
+                
                 
                 // make all buttons white
                 cameraBuilder.photoActionButtonConfigurationClosure = ^(PESDKButton * _Nonnull button) {
@@ -152,8 +157,12 @@
             NSData *imageData = [NSData dataWithContentsOfFile:filepath options:0 error:&dataCreationError];
             
             // Open PESDK
+            NSLog(@"Path Adding: %@", filepath);
             if (imageData && !dataCreationError) {
-                PESDKPhotoEditViewController *photoEditViewController = [[PESDKPhotoEditViewController alloc] initWithData:imageData configuration:configuration];
+                PESDKPhoto *photo = [[PESDKPhoto alloc] initWithData:imageData];
+                
+                PESDKPhotoEditViewController *photoEditViewController = [[PESDKPhotoEditViewController alloc] initWithPhotoAsset:photo configuration:configuration];
+                
                 photoEditViewController.delegate = self;
                 
                 dispatch_async(dispatch_get_main_queue(), ^{
@@ -163,15 +172,36 @@
                 NSLog(@"Failed to open given path: %@", dataCreationError);
             }
         } else {
-            self.fromCamera = NO;
+            self.fromCamera = YES;
+                        
             PESDKCameraViewController *cameraViewController = [[PESDKCameraViewController alloc] initWithConfiguration:configuration];
+            
+            cameraViewController.modalPresentationStyle = UIModalPresentationFullScreen;
+            
+            [cameraViewController setCancelBlock:^{
+                [self closeControllerWithResult:nil];
+            }];
+            
+            __weak PESDKCameraViewController *weakCameraViewController = cameraViewController;
             [cameraViewController setCompletionBlock:^(UIImage * _Nullable image, NSURL * _Nullable url) {
                 
+                PESDKPhoto *photo = [[PESDKPhoto alloc] initWithImage:image];
+            
                 if (self.shouldSaveCamera) {
-                    [self saveImageToPhotoLibrary:image];
+                    [self saveImageToPhotoLibraryWithoutReturn:image];
                 }
                 
-                PESDKPhotoEditViewController *photoEditViewController = [[PESDKPhotoEditViewController alloc] initWithPhoto:image configuration:configuration];
+                NSMutableArray<PESDKPhotoEditMenuItem *> *menuItems = [[PESDKPhotoEditMenuItem defaultItems] mutableCopy];
+                
+                PESDKPhotoEditModel *photoEditModel = [weakCameraViewController photoEditModel];
+                
+                PESDKPhotoEditViewController *photoEditViewController = [[PESDKPhotoEditViewController alloc] initWithPhotoAsset:photo configuration:configuration photoEditModel:photoEditModel];
+                photoEditViewController.modalPresentationStyle = UIModalPresentationFullScreen;
+                
+                
+                //PESDKPhotoEditViewController *photoEditViewController = [[PESDKPhotoEditViewController alloc] initWithPhotoAsset:photo configuration:configuration menuItems:menuItems photoEditModel:photoEditModel];
+                
+        
                 photoEditViewController.delegate = self;
                 [self.viewController dismissViewControllerAnimated:YES completion:^{
                     [self.viewController presentViewController:photoEditViewController animated:YES completion:nil];
@@ -196,6 +226,17 @@
 - (void)closeControllerWithResult:(CDVPluginResult *)result {
     [self.viewController dismissViewControllerAnimated:YES completion:^{
         [self finishCommandWithResult:result];
+    }];
+}
+
+/**
+ Closes all PESDK view controllers and sends a result
+ back to Cordova.
+ 
+ @param result The result to be sent.
+ */
+- (void)closeControllerWithResultViaCancel:(CDVPluginResult *)result {
+    [self.viewController dismissViewControllerAnimated:YES completion:^{
     }];
 }
 
@@ -251,11 +292,31 @@
 #pragma mark - PESDKPhotoEditViewControllerDelegate
 
 // The PhotoEditViewController did save an image.
-- (void)photoEditViewController:(PESDKPhotoEditViewController *)photoEditViewController didSaveImage:(UIImage *)image imageAsData:(NSData *)data {
-    if (image) {
+- (void)photoEditViewController:(PESDKPhotoEditViewController *)photoEditViewController didSaveImage:(UIImage *)image imageAsData:(NSData *)imageData {
+    NSLog(@"Image Saved");
+    
+    PESDKPhotoEditViewControllerOptions *photoEditViewControllerOptions = photoEditViewController.configuration.photoEditViewControllerOptions;
+    
+    if (imageData.length == 0) {
+      // Export image without any changes to target format if possible.
+      switch (photoEditViewControllerOptions.outputImageFileFormat) {
+        case PESDKImageFileFormatPng:
+              NSLog(@"PNG");
+          imageData = UIImagePNGRepresentation(image);
+          break;
+        case PESDKImageFileFormatJpeg:
+              NSLog(@"JPEG");
+          imageData = UIImageJPEGRepresentation(image, photoEditViewControllerOptions.compressionQuality);
+          break;
+        default:
+          break;
+      }
+    }
+    
+    if (imageData) {
         if(!photoEditViewController.hasChanges) {
             NSLog(@"Images are the same");
-            [self returnBasicImage:image];
+            [self returnBasicImage:imageData];
         } else {
             [self saveImageToPhotoLibrary:image];
         }
@@ -269,7 +330,7 @@
 - (void)photoEditViewControllerDidCancel:(PESDKPhotoEditViewController *)photoEditViewController {
     
     if (self.fromCamera) {
-        [self closeControllerWithResult:nil];
+        [self closeControllerWithResultViaCancel:nil];
         NSLog(@"Camera open");
         
         PESDKConfiguration *configuration = [[PESDKConfiguration alloc] initWithBuilder:^(PESDKConfigurationBuilder * _Nonnull builder) {
@@ -279,8 +340,10 @@
             
             // Disable video recording
             [builder configureCameraViewController:^(PESDKCameraViewControllerOptionsBuilder * _Nonnull cameraBuilder) {
-                [cameraBuilder setAllowedRecordingModesAsNSNumbers:@[@0]];
-                [cameraBuilder setShowCancelButton:YES];
+                // Just enable photos
+                cameraBuilder.allowedRecordingModes = @[@(RecordingModePhoto)];
+                // Show cancel button
+                cameraBuilder.showCancelButton = true;
                 
                 // make all buttons white
                 cameraBuilder.photoActionButtonConfigurationClosure = ^(PESDKButton * _Nonnull button) {
@@ -316,10 +379,12 @@
         [cameraViewController setCompletionBlock:^(UIImage * _Nullable image, NSURL * _Nullable url) {
             
             if (self.shouldSaveCamera) {
-                [self saveImageToPhotoLibrary:image];
+                [self saveImageToPhotoLibraryWithoutReturn:image];
             }
             
-            PESDKPhotoEditViewController *photoEditViewController = [[PESDKPhotoEditViewController alloc] initWithPhoto:image configuration:configuration];
+            PESDKPhoto *photo = [[PESDKPhoto alloc] initWithImage:image];
+            PESDKPhotoEditViewController *photoEditViewController = [[PESDKPhotoEditViewController alloc] initWithPhotoAsset:photo configuration:configuration];
+            
             photoEditViewController.delegate = self;
             [self.viewController dismissViewControllerAnimated:YES completion:^{
                 [self.viewController presentViewController:photoEditViewController animated:YES completion:nil];
@@ -360,11 +425,11 @@
 
 Simple return of the original image
  **/
-- (void)returnBasicImage:(UIImage *)image {
+- (void)returnBasicImage:(NSData *)imageData {
      [self.commandDelegate runInBackground:^{
          CDVPluginResult *resultAsync;
          NSString *extension =  @"jpg";
-         NSData* imageData = [self processImage:image];
+         //NSData* imageData = [self processImage:image];
          NSURL *url = [self copyTempImageData:imageData withUTI:extension];
          NSString *urlString = [url absoluteString];
          NSDictionary *payload = [NSDictionary dictionaryWithObjectsAndKeys:urlString, @"url", extension, @"uti", nil, @"false", @"edit", nil];
@@ -376,6 +441,64 @@ Simple return of the original image
          });
      }];
 }
+
+/**
+ Saves an image to the iOS Photo Library
+ 
+ @param image The image to be saved.
+ */
+- (void)saveImageToPhotoLibraryWithoutReturn:(UIImage *)image {
+    [self.commandDelegate runInBackground:^{
+        
+        NSLog(@"Bool Save value: %d", self.shouldSave);
+        
+        if (self.shouldSaveCamera) {
+            __block PHObjectPlaceholder *assetPlaceholder = nil;
+            
+            // Apple did a great job at making this API convoluted as fuck.
+            PHPhotoLibrary *photos = [PHPhotoLibrary sharedPhotoLibrary];
+            [photos performChanges:^{
+                // Request creating an asset from the image.
+                PHAssetChangeRequest *createAssetRequest = [PHAssetChangeRequest creationRequestForAssetFromImage:image];
+                // Get a placeholder for the new asset.
+                assetPlaceholder = [createAssetRequest placeholderForCreatedAsset];
+            } completionHandler:^(BOOL success, NSError *error) {
+                CDVPluginResult *result;
+                if (success) {
+                    PHAsset *asset = [PHAsset fetchAssetsWithLocalIdentifiers:@[ assetPlaceholder.localIdentifier ] options: nil].firstObject;
+                    if (asset != nil) {
+                        // Fetch high quality image and save in folder
+                        PHImageRequestOptions *operation = [[PHImageRequestOptions alloc] init];
+                        operation.deliveryMode = PHImageRequestOptionsDeliveryModeHighQualityFormat;
+                        [[PHImageManager defaultManager] requestImageDataForAsset:asset
+                                                                          options:operation
+                                                                    resultHandler:^(NSData *imageData, NSString *dataUTI, UIImageOrientation orientation, NSDictionary *info) {
+                                                                        CDVPluginResult *resultAsync;
+                                                                        NSError *error = [info objectForKey:PHImageErrorKey];
+                                                                        if (error != nil) {
+                                                                            resultAsync = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:[error localizedDescription]];
+                                                                        } else {
+                                                                            NSURL *url = [self copyTempImageData:imageData withUTI:dataUTI];
+                                                                            NSString *urlString = [url absoluteString];
+                                                                            NSDictionary *payload = [NSDictionary dictionaryWithObjectsAndKeys:urlString, @"url", dataUTI, @"uti",  @"true", @"edit", nil];
+                                                                            resultAsync = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
+                                                                                                        messageAsDictionary:payload];
+                                                                        }
+                                                                    }];
+                        return;
+                    } else {
+                        result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR
+                                                   messageAsString:@"Failed to load photo asset."];
+                    }
+                } else {
+                    result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR
+                                               messageAsString:[error localizedDescription]];
+                }
+            }];
+        }
+    }];
+}
+
 /**
  Saves an image to the iOS Photo Library and sends
  the corresponding results to Cordova.
@@ -396,7 +519,7 @@ Simple return of the original image
             NSDictionary *payload = [NSDictionary dictionaryWithObjectsAndKeys:urlString, @"url", extension, @"uti", @"false", @"edit", nil];
             resultAsync = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
                                         messageAsDictionary:payload];
-
+            
             dispatch_async(dispatch_get_main_queue(), ^{
                 [self closeControllerWithResult:resultAsync];
             });
